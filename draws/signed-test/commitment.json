@@ -1,0 +1,23 @@
+{
+  "tool_version": "1.0.0",
+  "created_utc": "2026-07-04T02:43:28Z",
+  "population_file": "population.csv",
+  "population_sha256": "b7d7ff4c3d46eb4f84036384fa47dc3a81f27ea8aa99352df915762a616997ea",
+  "population_rows": 200,
+  "id_column": "invoice_id",
+  "sample_size": 10,
+  "created_after_beacon": {
+    "round": 30109881,
+    "randomness": "153f71d4c628075ec0906be7bbf07397fa5e0cc81f6d07d9e3f7f64ca054351c",
+    "round_time_utc": "2026-07-04T02:43:27Z"
+  },
+  "beacon": {
+    "network": "drand-quicknet",
+    "chain_hash": "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+    "scheme_id": "bls-unchained-g1-rfc9380",
+    "group_public_key": "83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a",
+    "target_round": 30110081,
+    "target_round_time_utc": "2026-07-04T02:53:27Z"
+  },
+  "algorithm": "seed = sha256(randomness_hex + '|' + population_sha256); key_i = sha256(seed_hex + '|' + record_id_i); sort ascending by (key_i, record_id_i); take first sample_size."
+}
