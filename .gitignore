@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+# raw sampling populations may contain PII — never publish them
+**/population.csv
