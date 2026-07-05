@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A plain-language explainer of how a verifiable random sample is provably fair.">
+<style>html,body{margin:0;padding:0}img{max-width:100%}</style>
+<title>How a Provably Fair Sample Works</title>
+
+<style>
+  :root {
+    --paper:        #F3F5F8;
+    --paper-raised: #FFFFFF;
+    --paper-sunk:   #EAEEF3;
+    --ink:          #131A24;
+    --ink-soft:     #47515F;
+    --ink-faint:    #7A8493;
+    --line:         #DCE1E8;
+    --line-strong:  #C6CED8;
+    --beacon:       #B9781F;   /* amber, contrast-safe on paper */
+    --beacon-bright:#D8912B;
+    --teal:         #1E6675;
+    --teal-ink:     #164E5A;
+    --pass:         #2C7A54;
+    --alert:        #B14428;
+    --seal:         rgba(185,120,31,0.10);
+
+    --serif: "Hoefler Text", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+    --mono:  "SF Mono", "JetBrains Mono", "Cascadia Code", ui-monospace, Menlo, Consolas, monospace;
+
+    --measure: 64ch;
+    --wide: 74rem;
+
+    --s1: .35rem; --s2: .6rem; --s3: 1rem; --s4: 1.6rem;
+    --s5: 2.6rem; --s6: 4rem; --s7: 6rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:        #0D131D;
+      --paper-raised: #151E2A;
+      --paper-sunk:   #0A0F17;
+      --ink:          #E8ECF3;
+      --ink-soft:     #A6B0BF;
+      --ink-faint:    #6E7A8A;
+      --line:         #263241;
+      --line-strong:  #35455A;
+      --beacon:       #E8AE52;
+      --beacon-bright:#F0BB63;
+      --teal:         #57B7C8;
+      --teal-ink:     #7FCDDA;
+      --pass:         #5BC08D;
+      --alert:        #E68064;
+      --seal:         rgba(232,174,82,0.13);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper:#F3F5F8; --paper-raised:#FFFFFF; --paper-sunk:#EAEEF3;
+    --ink:#131A24; --ink-soft:#47515F; --ink-faint:#7A8493;
+    --line:#DCE1E8; --line-strong:#C6CED8;
+    --beacon:#B9781F; --beacon-bright:#D8912B; --teal:#1E6675; --teal-ink:#164E5A;
+    --pass:#2C7A54; --alert:#B14428; --seal:rgba(185,120,31,0.10);
+  }
+  :root[data-theme="dark"] {
+    --paper:#0D131D; --paper-raised:#151E2A; --paper-sunk:#0A0F17;
+    --ink:#E8ECF3; --ink-soft:#A6B0BF; --ink-faint:#6E7A8A;
+    --line:#263241; --line-strong:#35455A;
+    --beacon:#E8AE52; --beacon-bright:#F0BB63; --teal:#57B7C8; --teal-ink:#7FCDDA;
+    --pass:#5BC08D; --alert:#E68064; --seal:rgba(232,174,82,0.13);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 1.09rem;
+    line-height: 1.68;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { width: 100%; max-width: var(--wide); margin: 0 auto; padding: 0 1.5rem; }
+  .measure { max-width: var(--measure); }
+  .measure-wide { max-width: 52rem; }
+
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; line-height: 1.14; }
+
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: .74rem; font-weight: 700;
+    letter-spacing: .19em; text-transform: uppercase;
+    color: var(--teal);
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  a { color: var(--teal); text-underline-offset: 3px; }
+
+  code, .mono { font-family: var(--mono); }
+
+  :where(a, button):focus-visible {
+    outline: 2px solid var(--beacon);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  /* ---------- HERO ---------- */
+  .hero { padding: var(--s7) 0 var(--s6); border-bottom: 1px solid var(--line); }
+  .hero .eyebrow { display: inline-flex; align-items: center; gap: .55rem; }
+  .hero-dot {
+    width: .55rem; height: .55rem; border-radius: 50%;
+    background: var(--beacon-bright);
+    box-shadow: 0 0 0 0 rgba(216,145,43,.5);
+    animation: pulse 3s ease-out infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(216,145,43,.45); }
+    70%  { box-shadow: 0 0 0 10px rgba(216,145,43,0); }
+    100% { box-shadow: 0 0 0 0 rgba(216,145,43,0); }
+  }
+  h1.hero-title {
+    font-size: clamp(2.3rem, 6vw, 3.7rem);
+    letter-spacing: -.015em;
+    margin: 1.1rem 0 0;
+  }
+  h1.hero-title em { font-style: italic; color: var(--beacon); }
+  .hero-lede {
+    font-size: 1.28rem; line-height: 1.5; color: var(--ink-soft);
+    max-width: 40ch; margin-top: 1.4rem;
+  }
+
+  /* live beacon panel */
+  .beacon-panel {
+    margin-top: var(--s5);
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.35rem 1.5rem;
+    max-width: 42rem;
+    box-shadow: 0 1px 2px rgba(19,26,36,.04);
+  }
+  .beacon-panel .cap {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap;
+    font-size: .78rem; color: var(--ink-faint); letter-spacing: .02em;
+  }
+  .beacon-panel .cap b { color: var(--teal); font-weight: 700; letter-spacing: .04em; }
+  .beacon-val {
+    font-family: var(--mono);
+    font-size: clamp(.82rem, 2.6vw, 1.02rem);
+    letter-spacing: .01em;
+    color: var(--ink);
+    margin-top: .7rem;
+    word-break: break-all;
+    transition: color .18s ease;
+  }
+  .beacon-val.flash { color: var(--beacon-bright); }
+  .beacon-note { font-size: .8rem; color: var(--ink-faint); margin-top: .6rem; }
+
+  /* ---------- generic section ---------- */
+  section.band { padding: var(--s6) 0; border-bottom: 1px solid var(--line); }
+  .kicker { margin-bottom: 1.4rem; }
+  h2.sect { font-size: clamp(1.7rem, 3.6vw, 2.3rem); letter-spacing: -.01em; }
+  .band p { margin: 1rem 0; }
+  .lead-p { font-size: 1.18rem; color: var(--ink-soft); }
+
+  strong { color: var(--ink); font-weight: 700; }
+
+  /* pull sentence */
+  .pull {
+    font-family: var(--serif);
+    font-size: clamp(1.4rem, 3.4vw, 2rem);
+    line-height: 1.32;
+    letter-spacing: -.01em;
+    max-width: 24ch;
+    margin: 0;
+  }
+  .pull em { font-style: italic; color: var(--beacon); }
+
+  /* ---------- loophole cards ---------- */
+  .cards2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1.2rem; margin-top: 1.8rem; }
+  .card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.5rem 1.5rem 1.6rem;
+  }
+  .card.threat { border-top: 3px solid var(--alert); }
+  .card .tag {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  }
+  .card.threat .tag { color: var(--alert); }
+  .card h3 { font-size: 1.3rem; margin: .5rem 0 .3rem; }
+  .card p { font-size: 1rem; margin: .6rem 0; color: var(--ink-soft); }
+  .card .fix {
+    margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--line-strong);
+    font-size: .96rem;
+  }
+  .card .fix b { color: var(--pass); }
+  .fix-mark { color: var(--pass); font-weight: 700; }
+
+  /* ---------- ingredients ---------- */
+  .ingredients { display: grid; gap: 1.2rem; margin-top: 1.8rem; }
+  @media (min-width: 52rem) { .ingredients { grid-template-columns: repeat(3, 1fr); } }
+  .ingredient {
+    background: var(--paper-raised); border: 1px solid var(--line);
+    border-radius: 14px; padding: 1.5rem;
+    display: flex; flex-direction: column; gap: .3rem;
+  }
+  .ingredient .ico {
+    width: 2.6rem; height: 2.6rem; border-radius: 10px;
+    background: var(--seal); color: var(--beacon);
+    display: grid; place-items: center; margin-bottom: .7rem;
+  }
+  .ingredient .ico svg { width: 1.5rem; height: 1.5rem; }
+  .ingredient h3 { font-size: 1.18rem; }
+  .ingredient p { font-size: .98rem; color: var(--ink-soft); margin: .4rem 0 0; }
+  .ingredient .plain {
+    margin-top: .9rem; font-size: .9rem; color: var(--teal-ink);
+    font-style: italic; font-family: var(--serif);
+  }
+
+  /* ---------- timeline ---------- */
+  .timeline { margin-top: 2rem; position: relative; }
+  .step {
+    display: grid; grid-template-columns: 3rem 1fr; gap: 1.2rem;
+    padding-bottom: 2.2rem; position: relative;
+  }
+  .step:not(:last-child)::before {
+    content: ""; position: absolute; left: 1.5rem; top: 3rem; bottom: 0;
+    width: 2px; background: var(--line-strong); transform: translateX(-1px);
+  }
+  .step-num {
+    width: 3rem; height: 3rem; border-radius: 50%;
+    background: var(--paper-raised); border: 2px solid var(--teal);
+    color: var(--teal); font-family: var(--serif); font-size: 1.25rem; font-weight: 600;
+    display: grid; place-items: center; z-index: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .step.is-wait .step-num { border-color: var(--line-strong); color: var(--ink-faint); border-style: dashed; }
+  .step.is-verify .step-num { border-color: var(--pass); color: var(--pass); }
+  .step-body h3 { font-size: 1.3rem; margin: .35rem 0 .1rem; }
+  .step-body .when {
+    font-family: var(--mono); font-size: .78rem; color: var(--ink-faint);
+    letter-spacing: .02em;
+  }
+  .step-body p { font-size: 1rem; color: var(--ink-soft); margin: .55rem 0 0; }
+  .step-body .plain {
+    margin-top: .8rem; padding: .8rem 1rem;
+    background: var(--seal); border-radius: 10px;
+    font-family: var(--serif); font-style: italic; font-size: 1rem; color: var(--ink);
+  }
+  .fact {
+    display: inline-block; margin-top: .8rem;
+    font-family: var(--mono); font-size: .82rem;
+    background: var(--paper-sunk); border: 1px solid var(--line);
+    padding: .12rem .5rem; border-radius: 6px; color: var(--ink-soft);
+    word-break: break-all;
+  }
+  .fact b { color: var(--ink); }
+
+  .gap-note {
+    margin-top: .4rem; font-size: .92rem; color: var(--ink-soft);
+    border-left: 3px solid var(--beacon); padding-left: .9rem;
+  }
+  .gap-note b { color: var(--beacon); }
+
+  /* ---------- recipe ---------- */
+  .recipe-grid { display: grid; gap: 1.5rem; margin-top: 1.8rem; align-items: start; }
+  @media (min-width: 52rem) { .recipe-grid { grid-template-columns: 1.05fr .95fr; } }
+  .recipe-box {
+    background: var(--paper-sunk); border: 1px solid var(--line);
+    border-radius: 14px; padding: 1.4rem 1.5rem; overflow-x: auto;
+  }
+  .recipe-box .rlabel { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; }
+  .recipe-box pre { margin: .9rem 0 0; font-family: var(--mono); font-size: .86rem; line-height: 1.9; color: var(--ink); white-space: pre; }
+  .recipe-box .fn { color: var(--teal); }
+  .recipe-box .cm { color: var(--ink-faint); }
+  .recipe-box .hl { color: var(--beacon); }
+  .recipe-steps { display: flex; flex-direction: column; gap: 1rem; }
+  .rstep { display: grid; grid-template-columns: 1.6rem 1fr; gap: .8rem; }
+  .rstep .b { font-family: var(--serif); color: var(--beacon); font-weight: 600; font-size: 1.05rem; }
+  .rstep p { margin: 0; font-size: .98rem; color: var(--ink-soft); }
+  .rstep p b { color: var(--ink); }
+
+  /* ---------- checklist ---------- */
+  .checklist { margin-top: 1.6rem; display: flex; flex-direction: column; gap: .1rem; }
+  .check {
+    display: grid; grid-template-columns: 1.7rem 1fr; gap: .9rem;
+    padding: 1.1rem 0; border-top: 1px solid var(--line);
+  }
+  .check:last-child { border-bottom: 1px solid var(--line); }
+  .check .mk {
+    width: 1.6rem; height: 1.6rem; border-radius: 50%; margin-top: .1rem;
+    border: 2px solid var(--pass); color: var(--pass);
+    display: grid; place-items: center; flex: none;
+  }
+  .check .mk svg { width: .9rem; height: .9rem; }
+  .check h3 { font-family: var(--sans); font-size: 1.05rem; font-weight: 700; margin: 0 0 .2rem; }
+  .check p { margin: 0; font-size: .96rem; color: var(--ink-soft); }
+  .check p .mono { font-size: .84rem; color: var(--ink); background: var(--paper-sunk); padding: .05rem .35rem; border-radius: 5px; }
+
+  /* ---------- closing ---------- */
+  .close { padding: var(--s6) 0 var(--s7); }
+  .verdict {
+    display: inline-flex; align-items: center; gap: .6rem;
+    background: var(--seal); color: var(--pass);
+    border: 1px solid color-mix(in srgb, var(--pass) 30%, transparent);
+    padding: .5rem 1rem; border-radius: 999px;
+    font-weight: 700; font-size: .95rem; letter-spacing: .02em;
+  }
+  .verdict svg { width: 1.1rem; height: 1.1rem; }
+  .close .pull { margin-top: 1.4rem; max-width: 30ch; }
+  .footer-note {
+    margin-top: 2.5rem; padding-top: 1.4rem; border-top: 1px solid var(--line);
+    font-size: .85rem; color: var(--ink-faint); max-width: 46rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-dot { animation: none; }
+    .beacon-val { transition: none; }
+    * { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="hero-dot" aria-hidden="true"></span>Verifiable Random Sampling</span>
+    <h1 class="hero-title">A random sample that <em>can't be rigged</em> — and that anyone can re-check.</h1>
+    <p class="hero-lede">You picked 10 invoices out of 200 to audit. Here is why no one — not even you, the person running the draw — could have steered which 10 got chosen.</p>
+
+    <div class="beacon-panel" aria-label="Illustration of a public randomness beacon">
+      <div class="cap">
+        <span>A public randomness beacon &mdash; <b>drand quicknet</b></span>
+        <span>new number every <span class="num">3</span> seconds</span>
+      </div>
+      <div class="beacon-val mono" id="beaconVal">153f71d4c628075ec0906be7bbf07397fa5e0cc81f6d07d9e3f7f64ca054351c</div>
+      <p class="beacon-note">Illustration. A worldwide network publishes a fresh, unpredictable number like this every few seconds. Nobody can guess the next one in advance, and nobody can change one after it appears. That unforgeable "coin toss" is what your sample is built on.</p>
+    </div>
+  </div>
+</div>
+
+<section class="band">
+  <div class="wrap measure">
+    <div class="kicker"><span class="eyebrow">The problem</span></div>
+    <h2 class="sect">Why "just pick 10 at random" isn't good enough</h2>
+    <p class="lead-p">When you press a button that does the random choosing on your own computer, an auditor a year later has no way to know you pressed it just once, honestly.</p>
+    <p>Spreadsheet and programming random functions (<code>RAND()</code>, <code>Math.random()</code>) all share one weakness: whoever runs them controls the starting point, so whoever runs them can quietly control the result. To a skeptical reviewer, "trust me, it was random" is not evidence.</p>
+    <p>Being genuinely honest isn't the issue — <strong>proving</strong> it is. This method replaces "trust me" with something a stranger can check for themselves, months later, without ever touching your computer.</p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap measure-wide">
+    <div class="kicker"><span class="eyebrow">Two ways a draw could be gamed</span></div>
+    <h2 class="sect">To be fair, the method has to close two doors</h2>
+    <p class="lead-p" style="max-width:52ch">If you can see the random number <em>before</em> the list and the process are locked down, there are exactly two ways to cheat. The whole design exists to shut both.</p>
+
+    <div class="cards2">
+      <div class="card threat">
+        <span class="tag">Loophole 1 &middot; Re-rolling</span>
+        <h3>Draw again until you like it</h3>
+        <p>If the random number already exists when you run the draw, you can simply run it over and over, keeping the one result that happens to pick the invoices you'd prefer nobody looks at.</p>
+        <div class="fix">
+          <span class="fix-mark">✓ Closed by</span> <b>calling your shot early.</b> You commit to a <em>future</em> beacon number — one that hasn't been created yet. You can't re-roll a dice that hasn't been thrown.
+        </div>
+      </div>
+      <div class="card threat">
+        <span class="tag">Loophole 2 &middot; List-editing</span>
+        <h3>Quietly change the list</h3>
+        <p>If you can see the random number first, you can reorder or edit rows so the "random" pick lands where you want — swap a name here, delete a row there, and the outcome bends to you.</p>
+        <div class="fix">
+          <span class="fix-mark">✓ Closed by</span> <b>sealing the list first.</b> You publish a tamper-proof fingerprint of the exact list <em>before</em> the number exists. Change one character later and the fingerprint no longer matches.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap measure">
+    <p class="pull">The trick is old and simple: <em>call your shot out loud, in public, before the dice leave your hand.</em></p>
+    <p style="margin-top:1.6rem">Everything below is just a careful, checkable version of that. Three ingredients make it work.</p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="kicker measure"><span class="eyebrow">The three ingredients</span>
+      <h2 class="sect" style="margin-top:.5rem">What the fairness is built from</h2>
+    </div>
+
+    <div class="ingredients">
+      <div class="ingredient">
+        <div class="ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/><circle cx="12" cy="13" r="2.2"/></svg>
+        </div>
+        <h3>A sealed fingerprint of your list</h3>
+        <p>A short code (a "hash") calculated from your exact list of 200 invoices. Change any single digit and the code changes completely.</p>
+        <p class="plain">Like a wax seal on an envelope: proof the contents haven't been swapped since it was closed.</p>
+      </div>
+      <div class="ingredient">
+        <div class="ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 3v0a9 9 0 0 1 9 9"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 12l4-5"/></svg>
+        </div>
+        <h3>A public number nobody controls</h3>
+        <p>A worldwide beacon (drand) run jointly by many independent organisations publishes a fresh, unpredictable number every 3 seconds. No single party can fake it or foresee it.</p>
+        <p class="plain">Like the winning number on live national television: public, timed, and beyond any one person's reach.</p>
+      </div>
+      <div class="ingredient">
+        <div class="ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14"/><path d="M7 4v6l-3 8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2l-3-8V4"/><path d="M6.5 14h11"/></svg>
+        </div>
+        <h3>A fixed recipe anyone can follow</h3>
+        <p>A plain set of arithmetic steps that turns the sealed list plus the public number into the sample. No hidden randomness — same inputs always give the same 10 invoices.</p>
+        <p class="plain">Like a recipe card: follow it with the same ingredients and you bake the identical loaf, every time.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="kicker measure"><span class="eyebrow">The process, step by step</span>
+      <h2 class="sect" style="margin-top:.5rem">How your actual draw happened</h2>
+      <p style="max-width:60ch">These are the real values from this draw &mdash; the sealed list, the public commit, the beacon round, and the ten-minute gap that makes it honest.</p>
+    </div>
+
+    <div class="timeline measure-wide">
+      <div class="step">
+        <div class="step-num num">1</div>
+        <div class="step-body">
+          <h3>Seal the list &amp; call the future number</h3>
+          <div class="when">04 Jul 2026 &middot; 02:43:28 UTC</div>
+          <p>The tool froze a copy of your 200 invoices, took its sealed fingerprint, and pointed at a specific beacon number that would not be produced for another ten minutes.</p>
+          <span class="fact">list fingerprint&nbsp; <b>b7d7ff4c3d46eb4f…616997ea</b></span><br>
+          <span class="fact"><b>200</b> rows &middot; choosing <b>10</b> &middot; targeting beacon round <b>30110081</b></span>
+          <div class="plain">You've now written your bet on paper — which invoices, and which not-yet-existing coin toss will decide them.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num num">2</div>
+        <div class="step-body">
+          <h3>Publish it in public, and sign it</h3>
+          <div class="when">04 Jul 2026 &middot; 02:43:32 UTC</div>
+          <p>The sealed fingerprint (never the private invoice data) was posted to a public GitHub page and digitally signed with your key, so anyone can later confirm it's genuinely yours and was there this early.</p>
+          <span class="fact">signed commit&nbsp; <b>f733813</b> &middot; GitHub: <b>Verified ✓</b></span>
+          <div class="plain">Your written bet is now nailed to the town notice-board, with your signature on it. It can't be quietly rewritten later.</div>
+        </div>
+      </div>
+
+      <div class="step is-wait">
+        <div class="step-num" aria-hidden="true">&middot;&middot;&middot;</div>
+        <div class="step-body">
+          <h3>Wait for the beacon</h3>
+          <div class="when">02:43 → 02:53 UTC &middot; a ten-minute gap</div>
+          <p>Nothing to do. The worldwide beacon keeps ticking toward the round you named.</p>
+          <div class="gap-note">This gap is the whole point. Your public bet was posted at <b>02:43</b>; the deciding number wasn't born until <b>02:53</b>. You provably could not have known it when you sealed the list.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num num">3</div>
+        <div class="step-body">
+          <h3>Draw, using the number that just appeared</h3>
+          <div class="when">04 Jul 2026 &middot; after 02:53:27 UTC</div>
+          <p>Once beacon round 30110081 existed, the tool re-checked that your list still matched the sealed fingerprint, fetched that exact number, and ran the fixed recipe to pick the 10 invoices. A completed draw is final — it refuses to re-run, so there's no re-rolling.</p>
+          <div class="plain">The televised number is in. You apply your pre-agreed recipe once, in the open. Whoever gets picked, gets picked.</div>
+        </div>
+      </div>
+
+      <div class="step is-verify">
+        <div class="step-num" aria-hidden="true">✓</div>
+        <div class="step-body">
+          <h3>Anyone can verify — with none of your equipment</h3>
+          <div class="when">any time afterward</div>
+          <p>An auditor re-fetches the same beacon number from a <em>different</em> independent mirror, re-checks the fingerprint against the public GitHub page, re-runs the recipe, and confirms they get your exact 10 invoices. Match = proven fair.</p>
+          <div class="plain">A stranger re-does the sum from public ingredients and lands on the same answer. No trust in you required.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="kicker measure"><span class="eyebrow">Under the hood</span>
+      <h2 class="sect" style="margin-top:.5rem">The recipe, in full</h2>
+      <p style="max-width:58ch">There is no secret sauce. It's three arithmetic steps — the same ones an auditor re-runs. Shown here for the curious; you don't need to read it to trust it.</p>
+    </div>
+
+    <div class="recipe-grid measure-wide">
+      <div class="recipe-box" aria-label="The selection formula">
+        <span class="rlabel">The formula</span>
+<pre><span class="cm"># 1. mix the public number with the sealed list</span>
+seed  = <span class="fn">sha256</span>( <span class="hl">randomness</span> + "|" + <span class="hl">list_fingerprint</span> )
+
+<span class="cm"># 2. give every invoice its own draw-ticket</span>
+ticket = <span class="fn">sha256</span>( seed + "|" + invoice_id )
+
+<span class="cm"># 3. sort by ticket, keep the first 10</span>
+sample = sort(all_invoices, by=ticket)[:<span class="hl">10</span>]</pre>
+      </div>
+      <div class="recipe-steps">
+        <div class="rstep"><span class="b">1</span><p><b>Mix.</b> Blend the public beacon number with your list's sealed fingerprint into one shared starting seed. Both sides must be right, so neither can be tampered with.</p></div>
+        <div class="rstep"><span class="b">2</span><p><b>Deal a ticket.</b> Each invoice gets its own scrambled "lottery ticket" derived from that seed and its own ID — unpredictable, but fixed once the seed is known.</p></div>
+        <div class="rstep"><span class="b">3</span><p><b>Sort &amp; take ten.</b> Line the invoices up by ticket and take the first ten. Every invoice had an equal chance; the outcome was sealed the moment the beacon spoke.</p></div>
+        <p style="font-size:.86rem;color:var(--ink-faint);margin:.4rem 0 0">No language's random generator is used — so it reproduces identically in Python, JavaScript, or a shell one-liner.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="kicker measure"><span class="eyebrow">Check it yourself</span>
+      <h2 class="sect" style="margin-top:.5rem">What a skeptic would confirm</h2>
+      <p style="max-width:56ch">Four checks, each against a public source you never touched. If all four pass, the sample is proven — not asserted.</p>
+    </div>
+
+    <div class="checklist measure-wide">
+      <div class="check">
+        <div class="mk" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg></div>
+        <div><h3>The bet was public before the number existed</h3><p>Open the signed GitHub commit <span class="mono">f733813</span>, confirm it's <strong>Verified</strong>, and that its timestamp is earlier than the beacon round it named. Posted at 02:43; number born at 02:53.</p></div>
+      </div>
+      <div class="check">
+        <div class="mk" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg></div>
+        <div><h3>The list is the one that was sealed</h3><p>Take the fingerprint of the invoice file and check it equals <span class="mono">b7d7ff4c…616997ea</span> — the value written into the public commit. No match means the list was altered.</p></div>
+      </div>
+      <div class="check">
+        <div class="mk" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg></div>
+        <div><h3>The number is genuine beacon output</h3><p>Fetch round <span class="mono">30110081</span> from an independent drand mirror and confirm it matches — and that its cryptographic signature checks out against the beacon's published key.</p></div>
+      </div>
+      <div class="check">
+        <div class="mk" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg></div>
+        <div><h3>The ten invoices follow from the recipe</h3><p>Re-run the three-step formula with those public inputs. It must reproduce the exact same ten invoices — bit for bit. This is a single command anyone can run.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="close">
+  <div class="wrap measure">
+    <span class="verdict"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg> Provably fair &mdash; not just claimed</span>
+    <p class="pull" style="margin-top:1.4rem">You didn't ask anyone to <em>trust</em> the draw. You handed them the means to <em>check</em> it.</p>
+    <p style="margin-top:1.4rem">That's the whole difference. A private random function produces a number and a promise. This produces a number and a public paper-trail that a stranger can re-walk, step for step, and arrive at the same answer — long after the fact, without your help, and without any way for you to have bent it.</p>
+
+    <p class="footer-note">The private invoice list itself is never published — only its sealed fingerprint is. Auditors are shown the raw list under confidentiality at report time and check it against that public fingerprint. Randomness beacon: drand quicknet, operated by the League of Entropy. The hex value in the header above is a live illustration generated in your browser, not a real beacon reading.</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var el = document.getElementById('beaconVal');
+    if (!el) return;
+    var hex = '0123456789abcdef';
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function make() {
+      var s = '';
+      for (var i = 0; i < 64; i++) s += hex[(Math.random() * 16) | 0];
+      return s;
+    }
+    function tick() {
+      el.textContent = make();
+      if (!reduce) {
+        el.classList.add('flash');
+        setTimeout(function () { el.classList.remove('flash'); }, 200);
+      }
+    }
+    setInterval(tick, 3000);
+  })();
+</script>
+</body>
+</html>
