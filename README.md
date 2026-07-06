@@ -11,9 +11,10 @@ Entropy — Cloudflare, EPFL, Kudelski, universities, etc.) and binds the draw w
 **commit-ahead protocol** so the result is fixed by public randomness that did not exist
 when you committed to the population.
 
-> **New to this?** [**docs/how-it-works.html**](docs/how-it-works.html) is a plain-language
-> explainer of *why* the sample is provably fair — written for a non-technical auditor or
-> donor, using the numbers from a real draw. Open it in a browser.
+> **New to this?** [**How it works — a plain-language explainer**](https://ktvarun82.github.io/verifiable-sampling/docs/how-it-works.html)
+> walks through *why* the sample is provably fair — written for a non-technical auditor or
+> donor, using the numbers from a real draw.
+> ([source](docs/how-it-works.html))
 
 - **Zero dependencies** — pure Python 3 standard library. The selection logic is ~30
   lines you (and your auditor) can read in full.
