@@ -1,44 +1,74 @@
 # Verifiable Random Sampling
 
-Draw a random sample from a list in a way that a third-party auditor can **independently
-reproduce**, and that **you (the operator) cannot predict or steer** — even though you
-run the tool yourself.
+Draw a random sample from a list so that:
 
-Standard random generators (`random`, `Math.random()`, `=RAND()`) can't prove this:
-whoever controls the seed controls the outcome. This tool sources its randomness from a
-**public randomness beacon** ([drand](https://drand.love) quicknet, run by the League of
-Entropy — Cloudflare, EPFL, Kudelski, universities, etc.) and binds the draw with a
-**commit-ahead protocol** so the result is fixed by public randomness that did not exist
-when you committed to the population.
+- **an auditor can reproduce it** independently, and
+- **you, the operator, cannot predict or steer it**, even though you run the tool yourself.
 
-> **New to this?** [**How it works — a plain-language explainer**](https://ktvarun82.github.io/verifiable-sampling/docs/how-it-works.html)
-> walks through *why* the sample is provably fair — written for a non-technical auditor or
-> donor, using the numbers from a real draw.
-> ([source](docs/how-it-works.html))
+> **New to this?** Read [**How it works — a plain-language explainer**](https://ktvarun82.github.io/verifiable-sampling/docs/how-it-works.html)
+> ([source](docs/how-it-works.html)). It explains *why* the sample is provably fair,
+> for a non-technical auditor or donor, using the numbers from a real draw.
 
-- **Zero dependencies** — pure Python 3 standard library. The selection logic is ~30
-  lines you (and your auditor) can read in full.
-- **The `draws/<name>/` folder is a self-contained audit package** — hand it to an
-  auditor and they can verify everything from a beacon mirror you never touched.
+**Highlights**
 
----
+- **Public randomness.** Uses the [drand](https://drand.love) quicknet beacon, run by the
+  League of Entropy (Cloudflare, EPFL, Kudelski, universities and others).
+- **Commit-ahead protocol.** You lock in the list *before* the randomness exists, so you
+  can't pick a result you like.
+- **Zero dependencies.** Pure Python 3 standard library. The selection logic is about 30
+  lines you and your auditor can read in full.
+- **Self-contained audit package.** Each `draws/<name>/` folder holds everything an
+  auditor needs, verifiable against a beacon mirror you never touched.
 
-## Why a naive "use a random number" approach fails an audit
+## Contents
 
-Even if you use a public beacon, two loopholes remain unless you commit ahead of time:
-
-1. **Grinding.** If the random value already exists when you run the draw, you can re-run
-   until you get a sample you like. → Closed by targeting a **future** beacon round whose
-   randomness does not exist yet.
-2. **List tampering.** If you can see the randomness before freezing the list, you can
-   reorder or edit rows to steer who gets picked. → Closed by publishing a **hash of the
-   exact population** *before* the round happens.
-
-This tool enforces both.
+- [Quick start](#quick-start)
+- [Why "just use a random number" fails an audit](#why-just-use-a-random-number-fails-an-audit)
+- [The protocol, step by step](#the-protocol-step-by-step)
+- [How the sample is chosen](#how-the-sample-is-chosen)
+- [The public GitHub anchor](#the-public-github-anchor)
+- [Auditor verification recipe](#auditor-verification-recipe)
+- [Beacon details](#beacon-details-drand-quicknet)
+- [Notes and limits](#notes-and-limits)
 
 ---
 
-## The protocol
+## Quick start
+
+```bash
+# 1. Commit: freeze the list and pick a future beacon round
+python3 verifiable_sample.py commit --population farmers_2026.csv --id-column farmer_id \
+    --sample-size 200 --lead-minutes 30 --out draws/2026-farmer-survey
+
+# 2. Anchor: publish the commitment to your public GitHub repo
+python3 verifiable_sample.py anchor --draw-dir draws/2026-farmer-survey
+
+# 3. Draw: once the round has passed, derive the sample
+python3 verifiable_sample.py draw --draw-dir draws/2026-farmer-survey
+
+# 4. Verify: you or the auditor re-check everything
+python3 verifiable_sample.py verify --draw-dir draws/2026-farmer-survey
+```
+
+The anchor step needs a one-time [GitHub setup](#one-time-setup).
+
+---
+
+## Why "just use a random number" fails an audit
+
+Ordinary random generators (`random`, `Math.random()`, `=RAND()`) prove nothing:
+whoever controls the seed controls the outcome.
+
+Even a public beacon leaves two loopholes unless you commit ahead of time:
+
+| Loophole | What goes wrong | How this tool closes it |
+|---|---|---|
+| **Grinding** | If the random value already exists, you can re-run until you like the sample. | Target a **future** beacon round whose randomness does not exist yet. |
+| **List tampering** | If you see the randomness before freezing the list, you can reorder or edit rows to steer who gets picked. | Publish a **hash of the exact population** *before* the round happens. |
+
+---
+
+## The protocol, step by step
 
 ```
       commit            anchor           (wait)            draw            verify
@@ -53,10 +83,10 @@ This tool enforces both.
                    ── BEFORE the round ──
 ```
 
-### One-time setup: a public GitHub repo for your commitments
+### One-time setup
 
-The anchor step publishes commitments to a public GitHub repo (only the *hashes* — never
-the raw data; see Privacy below). Set this up once:
+The anchor step publishes commitments to a public GitHub repo. Only *hashes* are
+published, never your raw data (see [Privacy](#privacy)).
 
 ```bash
 cd verifiable-sampling
@@ -64,17 +94,18 @@ git init && git branch -M main
 gh repo create <owner>/verifiable-sampling --public --source=. --remote=origin
 ```
 
-Optional but recommended — enable commit signing so anchors are provably *yours*:
+**Recommended:** sign your commits, so anchors are provably *yours*.
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519      # if you don't already have a key
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519      # skip if you already have a key
 git config --global gpg.format ssh
 git config --global user.signingkey ~/.ssh/id_ed25519.pub
 git config --global commit.gpgsign true
-# then add ~/.ssh/id_ed25519.pub as a *Signing Key* at github.com/settings/keys
 ```
 
-### 1. Commit (before the randomness exists)
+Then add `~/.ssh/id_ed25519.pub` as a *Signing Key* at github.com/settings/keys.
+
+### Step 1 — Commit (before the randomness exists)
 
 ```bash
 python3 verifiable_sample.py commit \
@@ -85,45 +116,61 @@ python3 verifiable_sample.py commit \
     --out draws/2026-farmer-survey
 ```
 
-This freezes a copy of your CSV, computes its SHA-256, embeds the *latest* drand round as
-a cryptographic "not-before" floor, and picks the future drand round that will be produced
-`--lead-minutes` from now.
+This command:
 
-### 2. Anchor (publish the commitment publicly, before the round)
+1. freezes a copy of your CSV and computes its SHA-256;
+2. embeds the *latest* drand round as a cryptographic "not-before" floor;
+3. picks the future drand round that will be produced `--lead-minutes` from now.
+
+### Step 2 — Anchor (publish before the round)
 
 ```bash
 python3 verifiable_sample.py anchor --draw-dir draws/2026-farmer-survey
 ```
 
-Commits `commitment.json` to your public GitHub repo (signed, if you set up a key) and
-pushes it. It prints a **public URL** like
-`https://github.com/<owner>/verifiable-sampling/commit/<sha>`. Record that URL with your
-project files — it is the timestamp evidence any future auditor checks. You do **not** need
-to know the auditor in advance; the public commit stands on its own.
+This commits `commitment.json` to your public GitHub repo (signed, if you set up a key),
+pushes it, and prints a **public URL** like:
 
-> **Do this well before the target round.** The whole security property is that the
-> commitment was public *before* the randomness existed. A 15–30 minute lead is plenty.
+```
+https://github.com/<owner>/verifiable-sampling/commit/<sha>
+```
 
-### 3. Draw (after the round's time has passed)
+Keep that URL with your project files. It is the timestamp evidence any future auditor
+checks. You do **not** need to know the auditor in advance.
+
+> **Anchor well before the target round.** The whole guarantee is that the commitment was
+> public *before* the randomness existed. A 15–30 minute lead is plenty.
+
+### Step 3 — Draw (after the round's time has passed)
 
 ```bash
 python3 verifiable_sample.py draw --draw-dir draws/2026-farmer-survey
 ```
 
-It refuses to run until the committed round exists, re-checks the population hash (aborts
-if the file changed), fetches the **committed** round (not "latest"), derives the sample,
-and writes `audit_record.json`. A completed draw is final — it refuses to overwrite,
-because re-drawing would reintroduce grinding.
+This command:
 
-### 4. Verify (you, or the auditor)
+- refuses to run until the committed round exists;
+- re-checks the population hash and aborts if the file changed;
+- fetches the **committed** round (not "latest") and derives the sample;
+- writes `audit_record.json`.
+
+A completed draw is final. The tool refuses to overwrite it, because re-drawing would
+reintroduce grinding.
+
+### Step 4 — Verify (you or the auditor)
 
 ```bash
 python3 verifiable_sample.py verify --draw-dir draws/2026-farmer-survey
 ```
 
-Re-fetches the round from a **different** drand mirror than the draw used, confirms the
-randomness matches, re-hashes the population, re-derives the sample, and (if anchored)
-re-checks the GitHub commit. Prints PASS/FAIL. To re-check just the anchor:
+This command:
+
+- re-fetches the round from a **different** drand mirror than the draw used;
+- confirms the randomness matches;
+- re-hashes the population and re-derives the sample;
+- re-checks the GitHub commit, if the draw was anchored.
+
+It prints **PASS** or **FAIL**. To re-check only the anchor:
 
 ```bash
 python3 verifiable_sample.py check-anchor --draw-dir draws/2026-farmer-survey
@@ -131,7 +178,10 @@ python3 verifiable_sample.py check-anchor --draw-dir draws/2026-farmer-survey
 
 ---
 
-## How the sample is chosen (no PRNG — reproducible in any language)
+## How the sample is chosen
+
+No pseudo-random generator is involved, so the result reproduces bit-for-bit in Python,
+JavaScript, Go, or even a shell one-liner:
 
 ```
 seed  = sha256( randomness_hex + "|" + population_sha256 )
@@ -139,86 +189,102 @@ key_i = sha256( seed_hex + "|" + record_id_i )       for each record
 sort records ascending by (key_i, record_id_i), take the first N
 ```
 
-No language's random-number generator is involved, so it reproduces bit-for-bit in
-Python, JavaScript, Go, or even a shell one-liner. `record_id` is the value in your
-`--id-column`, which must be **unique and non-empty** for every row.
+`record_id` is the value in your `--id-column`. It must be **unique and non-empty** for
+every row.
 
 ---
 
-## Why a public GitHub anchor (when you don't know the auditor yet)
+## The public GitHub anchor
 
-A common situation: you draw the sample now (e.g. farmers to survey), run the survey over
-a month or two, and only submit the report to donors/auditors at year-end — and you don't
-know who those donors will be in advance. So you *can't* email the commitment to a specific
-auditor before the round.
+### Why it's needed
 
-The fix is to publish the commitment to a **public, independently-timestamped medium**
-that *anyone* can inspect later. A public GitHub commit does this: it's visible to whoever
-shows up at year-end, and its existence in public history is evidence you can't quietly
-rewrite after the fact.
+A typical case: you draw the sample now (say, farmers to survey), run the survey for a
+month or two, and report to donors or auditors at year-end. You don't know who they will
+be, so you *can't* send them the commitment before the round.
 
-**Two safeguards make the GitHub timeline trustworthy:**
+Instead, you publish the commitment somewhere **public and independently timestamped**.
+A public GitHub commit is visible to whoever shows up at year-end, and you can't quietly
+rewrite public history after the fact.
 
-- **Signed commits** prove the commitment is genuinely *yours* (not someone impersonating
-  you). GitHub shows these as "Verified."
-- **The "not-before" floor.** GitHub commit *dates* are, on their own, forgeable by the
-  committer. So `commit` embeds the latest drand round's randomness into `commitment.json`.
-  Because a drand value cannot be known before it is produced, the commitment provably
-  could **not** have been authored earlier than that round's time — no backdating below
-  that floor is possible.
+### Two safeguards
 
-**Privacy — important:** the anchor publishes **only `commitment.json`** (the population
-*hash*, row count, and beacon parameters). Your raw `population.csv` — which may contain
-farmer names or other PII — is **never** pushed; the tool refuses to commit it and adds it
-to `.gitignore`. The raw list stays private and is shown to auditors under confidentiality
-at report time, where they check it against the published hash.
+- **Signed commits** prove the commitment is genuinely *yours*. GitHub shows them as
+  "Verified."
+- **The "not-before" floor.** On its own, a GitHub commit date can be forged by the
+  committer. So `commit` embeds the latest drand randomness into `commitment.json`. Since
+  a drand value can't be known before it is produced, the commitment could **not** have
+  been written earlier than that round. Backdating below that floor is impossible.
 
-**Strengthening the anchor.** GitHub is a trusted third party, so the residual assumption
-is "GitHub's public history wasn't tampered with." To reduce even that: publicize the
-commit URL as early as possible (project mailing list, your org's site), and/or *also*
-[OpenTimestamps](https://opentimestamps.org) the `commitment.json` for a trustless
-Bitcoin anchor. For most donor-reporting purposes a signed public commit is sufficient.
+### Privacy
+
+The anchor publishes **only `commitment.json`**: the population *hash*, row count, and
+beacon parameters.
+
+Your raw `population.csv`, which may contain names or other personal data, is **never**
+pushed. The tool refuses to commit it and adds it to `.gitignore`. Show the raw list to
+auditors privately at report time; they check it against the published hash.
+
+### Making the anchor even stronger
+
+GitHub is a trusted third party, so one assumption remains: that GitHub's public history
+wasn't tampered with. To reduce even that:
+
+- share the commit URL as early as possible (project mailing list, your organisation's
+  site), and/or
+- also timestamp `commitment.json` with [OpenTimestamps](https://opentimestamps.org) for
+  a trustless Bitcoin anchor.
+
+For most donor reporting, a signed public commit is enough.
 
 ---
 
-## Auditor verification recipe (independent of the operator)
+## Auditor verification recipe
 
-An auditor who has the `draws/<name>/` folder plus the public commit URL can confirm the
-draw without trusting your machine:
+With the `draws/<name>/` folder and the public commit URL, an auditor can check the draw
+without trusting the operator's machine.
 
-1. **The commitment was public before the randomness existed.** Open the commit URL on
-   GitHub, confirm it is "Verified" (signed by your org's key), and that its date is before
-   `target_round_time_utc` in `commitment.json`. Or run:
-   ```bash
-   python3 verifiable_sample.py check-anchor --draw-dir draws/<name>
-   ```
+**1. The commitment was public before the randomness existed.**
+Open the commit URL on GitHub. Confirm it is "Verified" (signed by the organisation's key)
+and dated before `target_round_time_utc` in `commitment.json`. Or run:
 
-2. **The population is the one that was committed.**
-   ```bash
-   sha256sum draws/<name>/population.csv
-   ```
-   Must equal `population_sha256` in `commitment.json` (which is what the public commit
-   contains).
+```bash
+python3 verifiable_sample.py check-anchor --draw-dir draws/<name>
+```
 
-3. **The randomness is genuine drand output for the committed round.** Fetch the round
-   from an independent mirror:
-   ```bash
-   curl https://api3.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/<round>
-   ```
-   Confirm `randomness` matches `audit_record.json`, then verify the BLS signature with
-   the official drand tooling against the group public key in `commitment.json`:
-   ```bash
-   # using the official drand CLI
-   drand verify --chain-hash 52db9ba7…  # or the JS lib drand-client
-   ```
-   (The public key `83cf0f2896…` is the League of Entropy quicknet key, published at
-   <https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/info>.)
+**2. The population is the one that was committed.**
 
-4. **The sample follows from the randomness.** Either re-run the sha256 + sort steps
-   above by hand, or just:
-   ```bash
-   python3 verifiable_sample.py verify --draw-dir draws/<name> --mirror https://api3.drand.sh
-   ```
+```bash
+sha256sum draws/<name>/population.csv
+```
+
+The result must equal `population_sha256` in `commitment.json`, which is what the public
+commit contains.
+
+**3. The randomness is genuine drand output for the committed round.**
+Fetch the round from an independent mirror:
+
+```bash
+curl https://api3.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/<round>
+```
+
+Confirm `randomness` matches `audit_record.json`. Then verify the BLS signature with
+official drand tooling against the group public key in `commitment.json`:
+
+```bash
+# using the official drand CLI
+drand verify --chain-hash 52db9ba7…  # or the JS lib drand-client
+```
+
+The public key `83cf0f2896…` is the League of Entropy quicknet key, published at
+<https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/info>.
+
+**4. The sample follows from the randomness.**
+Redo the sha256-and-sort steps from [How the sample is chosen](#how-the-sample-is-chosen)
+by hand, or run:
+
+```bash
+python3 verifiable_sample.py verify --draw-dir draws/<name> --mirror https://api3.drand.sh
+```
 
 ---
 
@@ -233,24 +299,24 @@ draw without trusting your machine:
 | Round for time T | `floor((T − genesis) / period) + 1` |
 | Mirrors | `api.drand.sh`, `api2.drand.sh`, `api3.drand.sh`, `drand.cloudflare.com` |
 
-Config lives at the top of `verifiable_sample.py`. If drand ever rotates the quicknet
-group key, update `GROUP_PUBLIC_KEY` there (and cross-check against the `/info` endpoint).
+This config lives at the top of `verifiable_sample.py`. If drand ever rotates the quicknet
+group key, update `GROUP_PUBLIC_KEY` there and cross-check it against the `/info` endpoint.
 
 ---
 
-## Notes & limits
+## Notes and limits
 
-- **Sampling without replacement**, uniform over the population. Each record is equally
-  likely; the sample is drawn in a defined order (useful if you later need "the next few"
-  as reserves — extend the sample size and the extra ids follow deterministically).
-- **Export DB data to CSV first.** The commitment freezes a file; a live query could
-  return different rows on re-run and can't be hashed by an auditor.
-- The tool does **not** itself verify the BLS signature (that's delegated to official
-  drand tooling on purpose — see step 3). It stores the signature so anyone can.
-- **Anchor before you draw, with margin.** The security property holds only if the public
-  commit predates the beacon round. The tool checks the ordering, but give yourself a
-  15–30 minute lead so a slow push doesn't cut it close.
-- **`population.csv` never leaves your machine via the anchor.** It is gitignored and the
-  tool refuses to publish it. Deliver it privately to auditors at report time.
-- Keep each real draw in its own `draws/<name>/` subfolder; that folder plus the public
-  commit URL is the complete evidence package.
+- **Sampling is without replacement** and uniform: every record is equally likely. The
+  sample comes in a fixed order, so if you need reserves, increase the sample size and the
+  extra ids follow deterministically.
+- **Export database data to CSV first.** The commitment freezes a file. A live query could
+  return different rows later and can't be hashed by an auditor.
+- **BLS signatures are not checked by the tool.** That is left to official drand tooling
+  on purpose (see auditor step 3). The tool stores the signature so anyone can check it.
+- **Anchor before you draw, with margin.** The guarantee holds only if the public commit
+  predates the beacon round. The tool checks the order, but a 15–30 minute lead keeps a
+  slow push from cutting it close.
+- **`population.csv` never leaves your machine through the anchor.** It is gitignored and
+  the tool refuses to publish it. Give it to auditors privately at report time.
+- **One folder per draw.** Keep each real draw in its own `draws/<name>/` folder. That
+  folder plus the public commit URL is the complete evidence package.
