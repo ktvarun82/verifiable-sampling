@@ -1,5 +1,7 @@
 # Verifiable Random Sampling
 
+*A zero-dependency Python tool that draws a random sample anyone can re-check, using public drand randomness.*
+
 Draw a random sample from a list so that:
 
 - **an auditor can reproduce it** independently, and
